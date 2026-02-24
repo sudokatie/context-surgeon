@@ -4,5 +4,5 @@ pub mod boilerplate;
 
 // Re-exports
 pub use minhash::MinHash;
-pub use tfidf::TfIdf;
+pub use tfidf::TfIdfScorer;
 pub use boilerplate::BoilerplateDetector;
