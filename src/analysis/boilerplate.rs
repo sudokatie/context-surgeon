@@ -55,6 +55,7 @@ impl BoilerplateDetector {
         max_confidence
     }
     
+    #[allow(dead_code)]
     pub fn is_boilerplate(&self, text: &str, threshold: f64) -> bool {
         self.detect(text) >= threshold
     }

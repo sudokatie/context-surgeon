@@ -19,10 +19,12 @@ pub struct AnalysisResult {
 
 #[derive(Debug, Clone)]
 pub struct AnalyzedSegment {
+    #[allow(dead_code)]
     pub index: usize,
     pub segment: Segment,
     pub minhash: MinHashSignature,
     pub tfidf_score: f64,
+    #[allow(dead_code)]
     pub boilerplate_score: f64,
     pub importance_score: f64,
     pub is_redundant: bool,

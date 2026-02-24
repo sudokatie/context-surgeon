@@ -1,0 +1,5 @@
+Context compression is the art of keeping what matters while discarding what doesn't. When you're working with large language models, context window limits become a real constraint. You can't just throw everything at the model and hope for the best.
+
+The key insight is that not all text is equally important. Some paragraphs contain the core information you need. Others are padding, boilerplate, or redundant restatements of things already said. A good compression algorithm identifies these patterns and keeps the signal while removing the noise.
+
+Modern tokenizers like tiktoken can tell you exactly how many tokens a piece of text will consume. Armed with this information, you can make intelligent decisions about what to keep and what to cut.

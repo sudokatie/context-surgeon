@@ -35,6 +35,7 @@ impl RedundancyRemover {
     }
     
     /// Get indices of non-redundant segments
+    #[allow(dead_code)]
     pub fn get_unique_indices(segments: &[AnalyzedSegment]) -> Vec<usize> {
         segments
             .iter()
@@ -45,11 +46,13 @@ impl RedundancyRemover {
     }
     
     /// Count redundant segments
+    #[allow(dead_code)]
     pub fn count_redundant(segments: &[AnalyzedSegment]) -> usize {
         segments.iter().filter(|s| s.is_redundant).count()
     }
     
     /// Count tokens in redundant segments
+    #[allow(dead_code)]
     pub fn count_redundant_tokens(segments: &[AnalyzedSegment]) -> usize {
         segments
             .iter()

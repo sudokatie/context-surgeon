@@ -1,0 +1,9 @@
+Context compression is the art of keeping what matters while discarding what doesn't. When you're working with large language models, context window limits become a real constraint.
+
+The skill of context compression involves maintaining what's important while removing what's unnecessary. When dealing with LLMs, the context window size is a significant limitation.
+
+Context compression means keeping important information and removing unimportant parts. Large language models have context window constraints that limit input size.
+
+The technique of compressing context focuses on preserving essential content while eliminating non-essential text. LLM context windows impose limits on input length.
+
+Compressing context effectively requires keeping critical information and discarding redundant content. Context window limitations in large language models restrict input capacity.

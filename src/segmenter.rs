@@ -3,12 +3,15 @@ use unicode_segmentation::UnicodeSegmentation;
 #[derive(Debug, Clone)]
 pub struct Segment {
     pub text: String,
+    #[allow(dead_code)]
     pub start: usize,
+    #[allow(dead_code)]
     pub end: usize,
     pub tokens: usize,
 }
 
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
 pub enum SegmentMode {
     Paragraph,
     Sentence,

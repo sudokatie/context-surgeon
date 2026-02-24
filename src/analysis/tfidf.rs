@@ -103,9 +103,7 @@ fn stem(word: &str) -> String {
         if s.ends_with("ll") || s.ends_with("ss") || s.ends_with("zz") {
             s.truncate(s.len() - 1);
         }
-    } else if s.ends_with("ed") && s.len() > 4 {
-        s.truncate(s.len() - 2);
-    } else if s.ends_with("es") && s.len() > 4 {
+    } else if (s.ends_with("ed") || s.ends_with("es")) && s.len() > 4 {
         s.truncate(s.len() - 2);
     } else if s.ends_with("s") && !s.ends_with("ss") && s.len() > 3 {
         s.truncate(s.len() - 1);

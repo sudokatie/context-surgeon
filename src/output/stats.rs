@@ -28,6 +28,7 @@ impl StatsOutput {
         Self::write(stats, &mut handle)
     }
     
+    #[allow(dead_code)]
     pub fn to_json<W: Write>(stats: &CompressionStats, writer: &mut W) -> io::Result<()> {
         let json = format!(
             r#"{{"original_tokens":{},"compressed_tokens":{},"tokens_saved":{},"compression_ratio":{:.4},"redundancy_removed":{},"boilerplate_removed":{},"extractive_removed":{},"segments_kept":{},"segments_total":{}}}"#,

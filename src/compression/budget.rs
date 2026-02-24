@@ -72,7 +72,8 @@ impl BudgetAllocator {
         preserve_head: usize,
         preserve_tail: usize,
     ) -> Result<Vec<usize>, BudgetError> {
-        let available = Self::calculate_available(budget, preserve_head, preserve_tail)?;
+        // Validate that budget can accommodate preserves
+        let _available = Self::calculate_available(budget, preserve_head, preserve_tail)?;
         
         if segments.is_empty() {
             return Ok(vec![]);
@@ -136,6 +137,7 @@ impl BudgetAllocator {
         Ok(selected)
     }
     
+    #[allow(dead_code)]
     pub fn verify(segments: &[AnalyzedSegment], selected: &[usize], budget: usize) -> bool {
         let total: usize = selected
             .iter()

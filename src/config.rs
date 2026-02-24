@@ -192,8 +192,8 @@ pub fn merge(mut config: Config, args: &Args) -> Result<Config, ConfigError> {
 }
 
 fn parse_budget(s: &str) -> Result<Budget, ConfigError> {
-    if s.ends_with('%') {
-        let pct: f64 = s[..s.len()-1].parse()
+    if let Some(pct_str) = s.strip_suffix('%') {
+        let pct: f64 = pct_str.parse()
             .map_err(|_| ConfigError::InvalidBudget(s.to_string()))?;
         if !(0.0..=100.0).contains(&pct) || pct == 0.0 {
             return Err(ConfigError::InvalidBudget(format!("{}% out of range", pct)));
