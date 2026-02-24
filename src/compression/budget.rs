@@ -113,7 +113,7 @@ impl BudgetAllocator {
         }
         
         // Fill remaining budget with highest-scoring middle segments
-        let middle_budget = if used < budget { budget - used } else { 0 };
+        let middle_budget = budget.saturating_sub(used);
         
         let mut middle_scored: Vec<_> = segments
             .iter()

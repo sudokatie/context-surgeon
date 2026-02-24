@@ -46,11 +46,10 @@ impl BoilerplateDetector {
         let mut max_confidence = 0.0;
         
         for pattern in &self.patterns {
-            if pattern.regex.is_match(text) {
-                if pattern.confidence > max_confidence {
+            if pattern.regex.is_match(text)
+                && pattern.confidence > max_confidence {
                     max_confidence = pattern.confidence;
                 }
-            }
         }
         
         max_confidence

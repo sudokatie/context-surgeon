@@ -99,7 +99,7 @@ pub fn analyze(
     for (i, seg) in final_segments.iter_mut().enumerate() {
         // Segments near start and end get boosted
         let position = i as f64 / len;
-        let position_weight = if position < 0.1 || position > 0.9 {
+        let position_weight = if !(0.1..=0.9).contains(&position) {
             1.0  // First and last 10% get full weight
         } else {
             config.thresholds.position_decay

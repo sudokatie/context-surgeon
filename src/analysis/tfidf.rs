@@ -88,7 +88,7 @@ fn preprocess(text: &str) -> Vec<String> {
     text.to_lowercase()
         .split(|c: char| !c.is_alphanumeric())
         .filter(|w| !w.is_empty() && w.len() > 1 && !STOPWORDS.contains(w))
-        .map(|w| stem(w))
+        .map(stem)
         .collect()
 }
 
