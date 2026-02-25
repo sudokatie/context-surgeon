@@ -6,6 +6,8 @@ mod tokenizer;
 mod analysis;
 mod compression;
 mod output;
+mod progress;
+mod coherence;
 
 use config::Budget;
 use std::fs;
@@ -68,15 +70,22 @@ fn run() -> Result<(), Error> {
     // Create tokenizer
     let tokenizer = tokenizer::create(&config.tokenizer);
     
+    // Get initial token count for progress tracking
+    let initial_tokens = tokenizer.count(&input);
+    
+    // Initialize progress tracker (shows bar for >50k tokens)
+    let progress = progress::ProgressTracker::new(initial_tokens);
+    
     // Calculate budget
     let budget = resolve_budget(&config.budget, &input, tokenizer.as_ref())?;
     
     // Segment input
+    progress.segmenting();
     let segments = segmenter::segment(&input, segmenter::SegmentMode::Paragraph);
     
     // Early exit if no segments
     if segments.is_empty() {
-        // Just output the original input
+        progress.finish();
         print!("{}", input);
         if config.stats {
             let token_count = tokenizer.count(&input);
@@ -92,11 +101,14 @@ fn run() -> Result<(), Error> {
     }
     
     // Analyze
+    progress.analyzing_redundancy();
     let analysis = analysis::analyze(segments, tokenizer.as_ref(), &config);
+    
+    progress.analyzing_importance();
     
     // Check if compression needed
     if analysis.total_tokens <= budget {
-        // No compression needed - output original
+        progress.finish();
         print!("{}", input);
         if config.stats {
             output::stats::StatsOutput::to_stderr(&compression::CompressionStats {
@@ -111,13 +123,30 @@ fn run() -> Result<(), Error> {
     }
     
     // Compress
+    progress.compressing();
     let result = compression::compress(
-        analysis,
+        analysis.clone(),
         budget,
         config.preserve_head,
         config.preserve_tail,
         &config,
     )?;
+    
+    // Perform coherence check
+    progress.reassembling();
+    let segment_texts: Vec<String> = analysis.segments.iter()
+        .map(|s| s.segment.text.clone())
+        .collect();
+    let kept_indices: Vec<usize> = (0..analysis.segments.len())
+        .filter(|&i| {
+            !analysis.segments[i].is_redundant && 
+            !analysis.segments[i].is_boilerplate
+        })
+        .collect();
+    
+    let warnings = coherence::CoherenceChecker::check(&segment_texts, &kept_indices);
+    
+    progress.finish();
     
     // Output compressed text
     output::text::TextOutput::to_stdout(&result)?;
@@ -125,6 +154,11 @@ fn run() -> Result<(), Error> {
     // Output stats if requested
     if config.stats {
         output::stats::StatsOutput::to_stderr(&result.stats)?;
+    }
+    
+    // Print coherence warnings (warnings only, exit 0)
+    if !warnings.is_empty() {
+        coherence::CoherenceChecker::print_warnings(&warnings);
     }
     
     Ok(())
@@ -193,9 +227,7 @@ mod tests {
     fn test_resolve_percentage_budget() {
         let budget = Budget::Percentage(0.5);
         let tokenizer = ApproximateTokenizer;
-        // "one two three four five" = 5 words * 1.3 = ~7 tokens
         let result = resolve_budget(&budget, "one two three four five six seven eight nine ten", &tokenizer).unwrap();
-        // 50% of ~13 tokens = ~7 tokens
         assert!(result > 0);
     }
 

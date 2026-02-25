@@ -95,3 +95,78 @@ fn test_redundant_fixture_removes_duplicates() {
     // Should keep fewer segments than total
     assert!(stderr.contains("Segments:"));
 }
+
+#[test]
+fn test_medium_fixture_exists() {
+    let path = fixture_path("medium.txt");
+    assert!(path.exists(), "medium.txt fixture should exist");
+}
+
+#[test]
+fn test_medium_fixture_compression() {
+    // Medium fixture should compress to target budget
+    cmd()
+        .arg("--budget")
+        .arg("500")
+        .arg("--stats")
+        .arg(fixture_path("medium.txt"))
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Compression Statistics"));
+}
+
+#[test]
+fn test_large_fixture_exists() {
+    let path = fixture_path("large.txt");
+    assert!(path.exists(), "large.txt fixture should exist");
+}
+
+#[test]
+fn test_large_fixture_compression() {
+    // Large fixture (~50k tokens) should compress
+    cmd()
+        .arg("--budget")
+        .arg("1000")
+        .arg("--stats")
+        .arg(fixture_path("large.txt"))
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Compression Statistics"));
+}
+
+#[test]
+fn test_code_fixture_exists() {
+    let path = fixture_path("code.py");
+    assert!(path.exists(), "code.py fixture should exist");
+}
+
+#[test]
+fn test_code_fixture_passthrough() {
+    // Code fixture should process successfully
+    cmd()
+        .arg("--budget")
+        .arg("10000")
+        .arg(fixture_path("code.py"))
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("def"));
+}
+
+#[test]
+fn test_mixed_fixture_exists() {
+    let path = fixture_path("mixed.txt");
+    assert!(path.exists(), "mixed.txt fixture should exist");
+}
+
+#[test]
+fn test_mixed_fixture_compression() {
+    // Mixed content fixture should compress and detect boilerplate
+    cmd()
+        .arg("--budget")
+        .arg("200")
+        .arg("--stats")
+        .arg(fixture_path("mixed.txt"))
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Segments:"));
+}
