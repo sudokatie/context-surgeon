@@ -29,6 +29,8 @@ pub struct AnalyzedSegment {
     pub importance_score: f64,
     pub is_redundant: bool,
     pub is_boilerplate: bool,
+    /// Whether this segment must be preserved (e.g., code blocks when --preserve-code)
+    pub is_preserved: bool,
 }
 
 pub fn analyze(
@@ -70,6 +72,9 @@ pub fn analyze(
             // Mark as boilerplate if above threshold
             let is_boilerplate = boilerplate_score >= config.thresholds.boilerplate_confidence;
             
+            // Code blocks are preserved when is_code_block is set
+            let is_preserved = segment.is_code_block;
+            
             AnalyzedSegment {
                 index,
                 segment,
@@ -79,6 +84,7 @@ pub fn analyze(
                 importance_score,
                 is_redundant: false,  // Set later by redundancy detection
                 is_boilerplate,
+                is_preserved,
             }
         })
         .collect();
@@ -142,7 +148,7 @@ mod tests {
         let tokenizer = ApproximateTokenizer;
         let config = test_config();
         let segments = vec![
-            Segment { text: "Hello world test".to_string(), start: 0, end: 16, tokens: 0 },
+            Segment { text: "Hello world test".to_string(), start: 0, end: 16, tokens: 0, is_code_block: false },
         ];
         let result = analyze(segments, &tokenizer, &config);
         assert_eq!(result.segments.len(), 1);
@@ -155,9 +161,9 @@ mod tests {
         let tokenizer = ApproximateTokenizer;
         let config = test_config();
         let segments = vec![
-            Segment { text: "The quick brown fox jumps over".to_string(), start: 0, end: 30, tokens: 0 },
-            Segment { text: "The quick brown fox jumps over".to_string(), start: 32, end: 62, tokens: 0 },
-            Segment { text: "Completely different unique content".to_string(), start: 64, end: 100, tokens: 0 },
+            Segment { text: "The quick brown fox jumps over".to_string(), start: 0, end: 30, tokens: 0, is_code_block: false },
+            Segment { text: "The quick brown fox jumps over".to_string(), start: 32, end: 62, tokens: 0, is_code_block: false },
+            Segment { text: "Completely different unique content".to_string(), start: 64, end: 100, tokens: 0, is_code_block: false },
         ];
         let result = analyze(segments, &tokenizer, &config);
         assert_eq!(result.segments.len(), 3);
@@ -171,8 +177,8 @@ mod tests {
         let tokenizer = ApproximateTokenizer;
         let config = test_config();
         let segments = vec![
-            Segment { text: "MIT License Copyright".to_string(), start: 0, end: 20, tokens: 0 },
-            Segment { text: "Normal content here".to_string(), start: 22, end: 40, tokens: 0 },
+            Segment { text: "MIT License Copyright".to_string(), start: 0, end: 20, tokens: 0, is_code_block: false },
+            Segment { text: "Normal content here".to_string(), start: 22, end: 40, tokens: 0, is_code_block: false },
         ];
         let result = analyze(segments, &tokenizer, &config);
         assert!(result.segments[0].is_boilerplate);
@@ -184,8 +190,8 @@ mod tests {
         let tokenizer = ApproximateTokenizer;
         let config = test_config();
         let segments = vec![
-            Segment { text: "Common words here today".to_string(), start: 0, end: 23, tokens: 0 },
-            Segment { text: "Quantum physics experiments".to_string(), start: 25, end: 52, tokens: 0 },
+            Segment { text: "Common words here today".to_string(), start: 0, end: 23, tokens: 0, is_code_block: false },
+            Segment { text: "Quantum physics experiments".to_string(), start: 25, end: 52, tokens: 0, is_code_block: false },
         ];
         let result = analyze(segments, &tokenizer, &config);
         // All segments should have importance scores
@@ -199,10 +205,23 @@ mod tests {
         let tokenizer = ApproximateTokenizer;
         let config = test_config();
         let segments = vec![
-            Segment { text: "one two three four".to_string(), start: 0, end: 18, tokens: 0 },
+            Segment { text: "one two three four".to_string(), start: 0, end: 18, tokens: 0, is_code_block: false },
         ];
         let result = analyze(segments, &tokenizer, &config);
         assert!(result.segments[0].segment.tokens > 0);
         assert_eq!(result.total_tokens, result.segments[0].segment.tokens);
+    }
+
+    #[test]
+    fn test_analyze_code_blocks_preserved() {
+        let tokenizer = ApproximateTokenizer;
+        let config = test_config();
+        let segments = vec![
+            Segment { text: "Normal text here".to_string(), start: 0, end: 16, tokens: 0, is_code_block: false },
+            Segment { text: "```rust\nfn main() {}\n```".to_string(), start: 18, end: 42, tokens: 0, is_code_block: true },
+        ];
+        let result = analyze(segments, &tokenizer, &config);
+        assert!(!result.segments[0].is_preserved);
+        assert!(result.segments[1].is_preserved);
     }
 }

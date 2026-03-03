@@ -59,6 +59,10 @@ pub struct Args {
     #[arg(long)]
     pub no_extractive: bool,
 
+    /// Preserve code blocks (never compress fenced code)
+    #[arg(long)]
+    pub preserve_code: bool,
+
     /// Path to config file
     #[arg(long, value_name = "PATH")]
     pub config: Option<PathBuf>,
@@ -177,5 +181,11 @@ mod tests {
     fn test_stats_flag() {
         let args = Args::parse_from(["test", "--budget", "8000", "--stats"]);
         assert!(args.stats);
+    }
+
+    #[test]
+    fn test_preserve_code_flag() {
+        let args = Args::parse_from(["test", "--budget", "8000", "--preserve-code"]);
+        assert!(args.preserve_code);
     }
 }

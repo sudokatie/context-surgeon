@@ -15,6 +15,8 @@ pub struct Config {
     pub thresholds: Thresholds,
     pub boilerplate_patterns: Vec<Regex>,
     pub preserve_patterns: Vec<Regex>,
+    /// Preserve code blocks (never compress fenced code)
+    pub preserve_code: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -137,6 +139,7 @@ pub fn load(path: Option<&Path>) -> Result<Config, ConfigError> {
         thresholds: file_config.thresholds,
         boilerplate_patterns,
         preserve_patterns,
+        preserve_code: false,
     })
 }
 
@@ -187,6 +190,9 @@ pub fn merge(mut config: Config, args: &Args) -> Result<Config, ConfigError> {
     config.strategies.extractive = !args.no_extractive;
     config.strategies.aggressive = args.aggressive;
     config.strategies.conservative = args.conservative;
+    
+    // Preserve code blocks
+    config.preserve_code = args.preserve_code;
     
     Ok(config)
 }

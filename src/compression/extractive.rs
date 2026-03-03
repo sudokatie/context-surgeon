@@ -111,10 +111,22 @@ impl ExtractiveCompressor {
         
         let total = segments.len();
         
-        // Compute importance for each segment
+        // First, always include preserved segments (code blocks when --preserve-code)
+        let mut selected = Vec::new();
+        let mut used = 0;
+        
+        for (i, seg) in segments.iter().enumerate() {
+            if seg.is_preserved {
+                selected.push(i);
+                used += seg.segment.tokens;
+            }
+        }
+        
+        // Compute importance for each non-preserved segment
         let mut scored: Vec<(usize, f64, usize)> = segments
             .iter()
             .enumerate()
+            .filter(|(i, seg)| !seg.is_preserved && !selected.contains(i))
             .map(|(i, seg)| {
                 let importance = Self::compute_importance(seg, i, total, config);
                 (i, importance, seg.segment.tokens)
@@ -125,10 +137,7 @@ impl ExtractiveCompressor {
         // Sort by importance descending
         scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         
-        // Greedily select
-        let mut selected = Vec::new();
-        let mut used = 0;
-        
+        // Greedily select from remaining budget
         for (idx, _score, tokens) in scored {
             if used + tokens <= budget {
                 selected.push(idx);
@@ -164,6 +173,7 @@ mod tests {
                 start: 0,
                 end: text.len(),
                 tokens,
+                is_code_block: false,
             },
             minhash: MinHashSignature::new(),
             tfidf_score: tfidf,
@@ -171,6 +181,7 @@ mod tests {
             importance_score: tfidf,
             is_redundant: false,
             is_boilerplate: false,
+            is_preserved: false,
         }
     }
 

@@ -8,6 +8,8 @@ pub struct Segment {
     #[allow(dead_code)]
     pub end: usize,
     pub tokens: usize,
+    /// Whether this segment is a code block (fenced with ```)
+    pub is_code_block: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -29,6 +31,103 @@ pub fn segment(text: &str, mode: SegmentMode) -> Vec<Segment> {
     }
 }
 
+/// Segment text with code block detection
+/// Code blocks (fenced with ```) are kept as single segments and marked
+pub fn segment_with_code_blocks(text: &str, mode: SegmentMode) -> Vec<Segment> {
+    let mut segments = Vec::new();
+    let mut pos = 0;
+    
+    // Find all code blocks first
+    let code_blocks = find_code_blocks(text);
+    
+    for (block_start, block_end) in &code_blocks {
+        // Process text before this code block
+        if pos < *block_start {
+            let before_text = &text[pos..*block_start];
+            let before_segments = segment(before_text, mode);
+            for mut seg in before_segments {
+                seg.start += pos;
+                seg.end += pos;
+                seg.is_code_block = false;
+                segments.push(seg);
+            }
+        }
+        
+        // Add the code block as a single preserved segment
+        let code_text = &text[*block_start..*block_end];
+        if code_text.len() >= MIN_SEGMENT_SIZE {
+            segments.push(Segment {
+                text: code_text.to_string(),
+                start: *block_start,
+                end: *block_end,
+                tokens: 0,
+                is_code_block: true,
+            });
+        }
+        
+        pos = *block_end;
+    }
+    
+    // Process remaining text after last code block
+    if pos < text.len() {
+        let after_text = &text[pos..];
+        let after_segments = segment(after_text, mode);
+        for mut seg in after_segments {
+            seg.start += pos;
+            seg.end += pos;
+            seg.is_code_block = false;
+            segments.push(seg);
+        }
+    }
+    
+    // Sort by start position to maintain order
+    segments.sort_by_key(|s| s.start);
+    
+    segments
+}
+
+/// Find fenced code blocks (```...```) in text
+/// Returns list of (start, end) byte positions
+fn find_code_blocks(text: &str) -> Vec<(usize, usize)> {
+    let mut blocks = Vec::new();
+    let mut pos = 0;
+    
+    while let Some(start) = text[pos..].find("```") {
+        let block_start = pos + start;
+        
+        // Find end of opening fence (includes language specifier)
+        let fence_end = text[block_start..].find('\n')
+            .map(|p| block_start + p + 1)
+            .unwrap_or(block_start + 3);
+        
+        // Find closing fence
+        if let Some(close_offset) = text[fence_end..].find("\n```") {
+            let block_end = fence_end + close_offset + 4; // Include closing ```
+            
+            // Check if there's more after closing fence (like language or newline)
+            let final_end = if block_end < text.len() && text[block_end..].starts_with('\n') {
+                block_end + 1
+            } else {
+                block_end
+            };
+            
+            blocks.push((block_start, final_end.min(text.len())));
+            pos = final_end;
+        } else {
+            // No closing fence, skip this opening
+            pos = fence_end;
+        }
+    }
+    
+    blocks
+}
+
+/// Check if a string is a fenced code block
+pub fn is_fenced_code_block(text: &str) -> bool {
+    let trimmed = text.trim();
+    trimmed.starts_with("```") && trimmed.ends_with("```") && trimmed.len() > 6
+}
+
 fn segment_paragraphs(text: &str) -> Vec<Segment> {
     let mut segments = Vec::new();
     let mut current_start = 0;
@@ -45,6 +144,7 @@ fn segment_paragraphs(text: &str) -> Vec<Segment> {
                     start,
                     end,
                     tokens: 0,
+                    is_code_block: false,
                 });
             } else {
                 // Split large segments
@@ -72,6 +172,7 @@ fn segment_sentences(text: &str) -> Vec<Segment> {
                 start,
                 end,
                 tokens: 0,
+                is_code_block: false,
             });
             
             last_end = end;
@@ -93,6 +194,7 @@ fn segment_lines(text: &str) -> Vec<Segment> {
                 start: current_pos,
                 end: current_pos + line.len(),
                 tokens: 0,
+                is_code_block: false,
             });
         }
         current_pos += line.len() + 1;  // +1 for newline
@@ -116,6 +218,7 @@ fn split_large_segment(text: &str, base_start: usize) -> Vec<Segment> {
             start: base_start + offset,
             end: base_start + offset + chunk.len(),
             tokens: 0,
+            is_code_block: false,
         });
         
         remaining = remaining[break_point..].trim_start();
@@ -128,6 +231,7 @@ fn split_large_segment(text: &str, base_start: usize) -> Vec<Segment> {
             start: base_start + offset,
             end: base_start + offset + remaining.len(),
             tokens: 0,
+            is_code_block: false,
         });
     }
     
@@ -216,9 +320,9 @@ mod tests {
     #[test]
     fn test_reassemble() {
         let segments = vec![
-            Segment { text: "First".to_string(), start: 0, end: 5, tokens: 0 },
-            Segment { text: "Second".to_string(), start: 7, end: 13, tokens: 0 },
-            Segment { text: "Third".to_string(), start: 15, end: 20, tokens: 0 },
+            Segment { text: "First".to_string(), start: 0, end: 5, tokens: 0, is_code_block: false },
+            Segment { text: "Second".to_string(), start: 7, end: 13, tokens: 0, is_code_block: false },
+            Segment { text: "Third".to_string(), start: 15, end: 20, tokens: 0, is_code_block: false },
         ];
         let result = reassemble(&segments, &[2, 0]);  // Out of order
         assert!(result.contains("First"));
@@ -229,8 +333,8 @@ mod tests {
     #[test]
     fn test_reassemble_order() {
         let segments = vec![
-            Segment { text: "First".to_string(), start: 0, end: 5, tokens: 0 },
-            Segment { text: "Second".to_string(), start: 7, end: 13, tokens: 0 },
+            Segment { text: "First".to_string(), start: 0, end: 5, tokens: 0, is_code_block: false },
+            Segment { text: "Second".to_string(), start: 7, end: 13, tokens: 0, is_code_block: false },
         ];
         let result = reassemble(&segments, &[1, 0]);
         // Should be in original order (0 before 1)
@@ -257,5 +361,65 @@ mod tests {
         let text = "Para one.\r\n\r\nPara two.\n\nPara three.";
         let segments = segment(text, SegmentMode::Paragraph);
         assert!(segments.len() >= 2);
+    }
+
+    #[test]
+    fn test_find_code_blocks() {
+        let text = "Before\n\n```rust\nfn main() {}\n```\n\nAfter";
+        let blocks = find_code_blocks(text);
+        assert_eq!(blocks.len(), 1);
+        assert!(text[blocks[0].0..blocks[0].1].starts_with("```"));
+    }
+
+    #[test]
+    fn test_find_multiple_code_blocks() {
+        let text = "```python\nprint('hi')\n```\n\nText\n\n```js\nconsole.log('hi')\n```";
+        let blocks = find_code_blocks(text);
+        assert_eq!(blocks.len(), 2);
+    }
+
+    #[test]
+    fn test_is_fenced_code_block() {
+        assert!(is_fenced_code_block("```\ncode\n```"));
+        assert!(is_fenced_code_block("```rust\nfn main() {}\n```"));
+        assert!(!is_fenced_code_block("not code"));
+        assert!(!is_fenced_code_block("```")); // Too short
+    }
+
+    #[test]
+    fn test_segment_with_code_blocks() {
+        let text = "Introduction paragraph here.\n\n```python\ndef hello():\n    print('hi')\n```\n\nConclusion paragraph here.";
+        let segments = segment_with_code_blocks(text, SegmentMode::Paragraph);
+        
+        // Should have: intro, code block, conclusion
+        assert!(segments.len() >= 2);
+        
+        // Find the code block segment
+        let code_seg = segments.iter().find(|s| s.is_code_block);
+        assert!(code_seg.is_some(), "Should have a code block segment");
+        assert!(code_seg.unwrap().text.contains("def hello"));
+    }
+
+    #[test]
+    fn test_segment_with_code_blocks_preserves_order() {
+        let text = "First para.\n\n```\ncode\n```\n\nSecond para.";
+        let segments = segment_with_code_blocks(text, SegmentMode::Paragraph);
+        
+        // Verify order: segments should be sorted by start position
+        for i in 1..segments.len() {
+            assert!(segments[i].start >= segments[i-1].start);
+        }
+    }
+
+    #[test]
+    fn test_segment_code_block_marked() {
+        let text = "Normal text here.\n\n```js\nconst x = 1;\n```\n\nMore normal text.";
+        let segments = segment_with_code_blocks(text, SegmentMode::Paragraph);
+        
+        let code_count = segments.iter().filter(|s| s.is_code_block).count();
+        let normal_count = segments.iter().filter(|s| !s.is_code_block).count();
+        
+        assert_eq!(code_count, 1);
+        assert!(normal_count >= 1);
     }
 }

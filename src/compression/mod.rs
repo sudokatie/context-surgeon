@@ -179,6 +179,7 @@ mod tests {
                 start: 0,
                 end: text.len(),
                 tokens,
+                is_code_block: false,
             },
             minhash: MinHashSignature::new(),
             tfidf_score: score,
@@ -186,6 +187,7 @@ mod tests {
             importance_score: score,
             is_redundant: false,
             is_boilerplate: false,
+            is_preserved: false,
         }
     }
 
