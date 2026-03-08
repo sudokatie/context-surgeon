@@ -17,6 +17,8 @@ pub struct Config {
     pub preserve_patterns: Vec<Regex>,
     /// Preserve code blocks (never compress fenced code)
     pub preserve_code: bool,
+    /// Use semantic chunking (respects headings, code blocks, paragraphs)
+    pub semantic: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -140,6 +142,7 @@ pub fn load(path: Option<&Path>) -> Result<Config, ConfigError> {
         boilerplate_patterns,
         preserve_patterns,
         preserve_code: false,
+        semantic: false,
     })
 }
 
@@ -193,6 +196,9 @@ pub fn merge(mut config: Config, args: &Args) -> Result<Config, ConfigError> {
     
     // Preserve code blocks
     config.preserve_code = args.preserve_code;
+    
+    // Semantic chunking
+    config.semantic = args.semantic;
     
     Ok(config)
 }

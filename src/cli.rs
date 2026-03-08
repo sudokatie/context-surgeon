@@ -63,6 +63,10 @@ pub struct Args {
     #[arg(long)]
     pub preserve_code: bool,
 
+    /// Use semantic chunking (respect headings, code blocks, paragraphs)
+    #[arg(long)]
+    pub semantic: bool,
+
     /// Path to config file
     #[arg(long, value_name = "PATH")]
     pub config: Option<PathBuf>,

@@ -10,6 +10,8 @@ pub struct Segment {
     pub tokens: usize,
     /// Whether this segment is a code block (fenced with ```)
     pub is_code_block: bool,
+    /// Heading level (1-6) if this segment starts with a heading, 0 otherwise
+    pub heading_level: u8,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -18,6 +20,8 @@ pub enum SegmentMode {
     Paragraph,
     Sentence,
     Line,
+    /// Semantic mode: respects headings, code blocks, and logical boundaries
+    Semantic,
 }
 
 const MIN_SEGMENT_SIZE: usize = 10;
@@ -28,12 +32,184 @@ pub fn segment(text: &str, mode: SegmentMode) -> Vec<Segment> {
         SegmentMode::Paragraph => segment_paragraphs(text),
         SegmentMode::Sentence => segment_sentences(text),
         SegmentMode::Line => segment_lines(text),
+        SegmentMode::Semantic => segment_semantic(text),
     }
+}
+
+/// Detect heading level from a line (1-6 for h1-h6, 0 if not a heading)
+pub fn detect_heading_level(line: &str) -> u8 {
+    let trimmed = line.trim();
+    if !trimmed.starts_with('#') {
+        return 0;
+    }
+    
+    let mut level = 0u8;
+    for c in trimmed.chars() {
+        if c == '#' {
+            level += 1;
+        } else if c == ' ' {
+            break;
+        } else {
+            return 0; // Not a valid heading (e.g., "###no-space")
+        }
+    }
+    
+    if level > 6 {
+        0 // More than 6 # is not a valid heading
+    } else if level > 0 && trimmed.len() > level as usize && trimmed.chars().nth(level as usize) == Some(' ') {
+        level
+    } else {
+        0
+    }
+}
+
+/// Semantic segmentation: respects headings, code blocks, and logical structure
+/// Groups content under headings together as semantic units
+fn segment_semantic(text: &str) -> Vec<Segment> {
+    let mut segments = Vec::new();
+    let lines: Vec<&str> = text.lines().collect();
+    let mut i = 0;
+    let mut char_pos = 0;
+    
+    while i < lines.len() {
+        let line = lines[i];
+        let line_start = char_pos;
+        
+        // Check for code block
+        if line.trim().starts_with("```") {
+            let block_start = char_pos;
+            let mut block_text = String::new();
+            block_text.push_str(line);
+            block_text.push('\n');
+            char_pos += line.len() + 1;
+            i += 1;
+            
+            // Find closing fence
+            while i < lines.len() {
+                let current = lines[i];
+                block_text.push_str(current);
+                block_text.push('\n');
+                char_pos += current.len() + 1;
+                i += 1;
+                
+                if current.trim().starts_with("```") {
+                    break;
+                }
+            }
+            
+            if block_text.len() >= MIN_SEGMENT_SIZE {
+                segments.push(Segment {
+                    text: block_text.trim_end().to_string(),
+                    start: block_start,
+                    end: char_pos,
+                    tokens: 0,
+                    is_code_block: true,
+                    heading_level: 0,
+                });
+            }
+            continue;
+        }
+        
+        // Check for heading
+        let heading_level = detect_heading_level(line);
+        if heading_level > 0 {
+            // Start a new semantic section under this heading
+            let mut section_text = String::new();
+            section_text.push_str(line);
+            section_text.push('\n');
+            char_pos += line.len() + 1;
+            i += 1;
+            
+            // Collect content until next heading (any level) or code block
+            while i < lines.len() {
+                let next_line = lines[i];
+                
+                // Stop at any heading - it starts a new section
+                if detect_heading_level(next_line) > 0 {
+                    break;
+                }
+                
+                // Stop at code block (will be processed separately)
+                if next_line.trim().starts_with("```") {
+                    break;
+                }
+                
+                section_text.push_str(next_line);
+                section_text.push('\n');
+                char_pos += next_line.len() + 1;
+                i += 1;
+            }
+            
+            let trimmed = section_text.trim();
+            if trimmed.len() >= MIN_SEGMENT_SIZE {
+                segments.push(Segment {
+                    text: trimmed.to_string(),
+                    start: line_start,
+                    end: char_pos,
+                    tokens: 0,
+                    is_code_block: false,
+                    heading_level,
+                });
+            }
+            continue;
+        }
+        
+        // Regular paragraph: collect until empty line, heading, or code block
+        let mut para_text = String::new();
+        while i < lines.len() {
+            let current = lines[i];
+            
+            // Stop at empty line
+            if current.trim().is_empty() {
+                char_pos += current.len() + 1;
+                i += 1;
+                break;
+            }
+            
+            // Stop at heading
+            if detect_heading_level(current) > 0 {
+                break;
+            }
+            
+            // Stop at code block
+            if current.trim().starts_with("```") {
+                break;
+            }
+            
+            para_text.push_str(current);
+            para_text.push('\n');
+            char_pos += current.len() + 1;
+            i += 1;
+        }
+        
+        let trimmed = para_text.trim();
+        if trimmed.len() >= MIN_SEGMENT_SIZE {
+            segments.push(Segment {
+                text: trimmed.to_string(),
+                start: line_start,
+                end: char_pos,
+                tokens: 0,
+                is_code_block: false,
+                heading_level: 0,
+            });
+        } else if para_text.is_empty() {
+            // Skip empty lines
+            char_pos += line.len() + 1;
+            i += 1;
+        }
+    }
+    
+    segments
 }
 
 /// Segment text with code block detection
 /// Code blocks (fenced with ```) are kept as single segments and marked
 pub fn segment_with_code_blocks(text: &str, mode: SegmentMode) -> Vec<Segment> {
+    // For semantic mode, code blocks are already handled
+    if matches!(mode, SegmentMode::Semantic) {
+        return segment_semantic(text);
+    }
+    
     let mut segments = Vec::new();
     let mut pos = 0;
     
@@ -62,6 +238,7 @@ pub fn segment_with_code_blocks(text: &str, mode: SegmentMode) -> Vec<Segment> {
                 end: *block_end,
                 tokens: 0,
                 is_code_block: true,
+                heading_level: 0,
             });
         }
         
@@ -137,6 +314,7 @@ fn segment_paragraphs(text: &str) -> Vec<Segment> {
         if trimmed.len() >= MIN_SEGMENT_SIZE {
             let start = text[current_start..].find(trimmed).map(|i| current_start + i).unwrap_or(current_start);
             let end = start + trimmed.len();
+            let heading_level = detect_heading_level(trimmed.lines().next().unwrap_or(""));
             
             if trimmed.len() <= MAX_SEGMENT_SIZE {
                 segments.push(Segment {
@@ -145,6 +323,7 @@ fn segment_paragraphs(text: &str) -> Vec<Segment> {
                     end,
                     tokens: 0,
                     is_code_block: false,
+                    heading_level,
                 });
             } else {
                 // Split large segments
@@ -173,6 +352,7 @@ fn segment_sentences(text: &str) -> Vec<Segment> {
                 end,
                 tokens: 0,
                 is_code_block: false,
+                heading_level: 0,
             });
             
             last_end = end;
@@ -189,12 +369,14 @@ fn segment_lines(text: &str) -> Vec<Segment> {
     for line in text.lines() {
         let trimmed = line.trim();
         if trimmed.len() >= MIN_SEGMENT_SIZE {
+            let heading_level = detect_heading_level(trimmed);
             segments.push(Segment {
                 text: trimmed.to_string(),
                 start: current_pos,
                 end: current_pos + line.len(),
                 tokens: 0,
                 is_code_block: false,
+                heading_level,
             });
         }
         current_pos += line.len() + 1;  // +1 for newline
@@ -207,11 +389,20 @@ fn split_large_segment(text: &str, base_start: usize) -> Vec<Segment> {
     let mut segments = Vec::new();
     let mut remaining = text;
     let mut offset = 0;
+    let mut is_first = true;
     
     while remaining.len() > MAX_SEGMENT_SIZE {
         // Find a good break point (sentence end or space)
         let break_point = find_break_point(&remaining[..MAX_SEGMENT_SIZE]);
         let chunk = &remaining[..break_point];
+        
+        // Only first chunk might have heading
+        let heading_level = if is_first {
+            detect_heading_level(chunk.lines().next().unwrap_or(""))
+        } else {
+            0
+        };
+        is_first = false;
         
         segments.push(Segment {
             text: chunk.to_string(),
@@ -219,6 +410,7 @@ fn split_large_segment(text: &str, base_start: usize) -> Vec<Segment> {
             end: base_start + offset + chunk.len(),
             tokens: 0,
             is_code_block: false,
+            heading_level,
         });
         
         remaining = remaining[break_point..].trim_start();
@@ -232,6 +424,7 @@ fn split_large_segment(text: &str, base_start: usize) -> Vec<Segment> {
             end: base_start + offset + remaining.len(),
             tokens: 0,
             is_code_block: false,
+            heading_level: 0,
         });
     }
     
@@ -320,9 +513,9 @@ mod tests {
     #[test]
     fn test_reassemble() {
         let segments = vec![
-            Segment { text: "First".to_string(), start: 0, end: 5, tokens: 0, is_code_block: false },
-            Segment { text: "Second".to_string(), start: 7, end: 13, tokens: 0, is_code_block: false },
-            Segment { text: "Third".to_string(), start: 15, end: 20, tokens: 0, is_code_block: false },
+            Segment { text: "First".to_string(), start: 0, end: 5, tokens: 0, is_code_block: false, heading_level: 0 },
+            Segment { text: "Second".to_string(), start: 7, end: 13, tokens: 0, is_code_block: false, heading_level: 0 },
+            Segment { text: "Third".to_string(), start: 15, end: 20, tokens: 0, is_code_block: false, heading_level: 0 },
         ];
         let result = reassemble(&segments, &[2, 0]);  // Out of order
         assert!(result.contains("First"));
@@ -333,12 +526,75 @@ mod tests {
     #[test]
     fn test_reassemble_order() {
         let segments = vec![
-            Segment { text: "First".to_string(), start: 0, end: 5, tokens: 0, is_code_block: false },
-            Segment { text: "Second".to_string(), start: 7, end: 13, tokens: 0, is_code_block: false },
+            Segment { text: "First".to_string(), start: 0, end: 5, tokens: 0, is_code_block: false, heading_level: 0 },
+            Segment { text: "Second".to_string(), start: 7, end: 13, tokens: 0, is_code_block: false, heading_level: 0 },
         ];
         let result = reassemble(&segments, &[1, 0]);
         // Should be in original order (0 before 1)
         assert!(result.starts_with("First"));
+    }
+
+    #[test]
+    fn test_detect_heading_level() {
+        assert_eq!(detect_heading_level("# Heading 1"), 1);
+        assert_eq!(detect_heading_level("## Heading 2"), 2);
+        assert_eq!(detect_heading_level("### Heading 3"), 3);
+        assert_eq!(detect_heading_level("#### Heading 4"), 4);
+        assert_eq!(detect_heading_level("##### Heading 5"), 5);
+        assert_eq!(detect_heading_level("###### Heading 6"), 6);
+        assert_eq!(detect_heading_level("####### Too many"), 0);
+        assert_eq!(detect_heading_level("Not a heading"), 0);
+        assert_eq!(detect_heading_level("#NoSpace"), 0);
+        assert_eq!(detect_heading_level("  # Indented"), 1);
+    }
+
+    #[test]
+    fn test_segment_semantic_headings() {
+        let text = "# Main Title\n\nIntro paragraph here.\n\n## Section One\n\nContent for section one.\n\n## Section Two\n\nContent for section two.";
+        let segments = segment(text, SegmentMode::Semantic);
+        
+        // Should have 3 segments: main (h1) + section1 (h2) + section2 (h2)
+        assert_eq!(segments.len(), 3, "Expected 3 sections");
+        
+        // First segment should be h1
+        assert_eq!(segments[0].heading_level, 1);
+        assert!(segments[0].text.contains("Main Title"));
+        assert!(segments[0].text.contains("Intro paragraph"));
+        
+        // Second and third segments should be h2
+        assert_eq!(segments[1].heading_level, 2);
+        assert!(segments[1].text.contains("Section One"));
+        
+        assert_eq!(segments[2].heading_level, 2);
+        assert!(segments[2].text.contains("Section Two"));
+    }
+
+    #[test]
+    fn test_segment_semantic_code_blocks() {
+        let text = "# Header\n\nSome text.\n\n```rust\nfn main() {}\n```\n\nMore text.";
+        let segments = segment(text, SegmentMode::Semantic);
+        
+        let code_segment = segments.iter().find(|s| s.is_code_block);
+        assert!(code_segment.is_some());
+        assert!(code_segment.unwrap().text.contains("fn main"));
+    }
+
+    #[test]
+    fn test_segment_semantic_nested_headings() {
+        let text = "# Top\n\nTop content.\n\n## Sub1\n\nSub1 content.\n\n### Sub1a\n\nSub1a content.\n\n## Sub2\n\nSub2 content.";
+        let segments = segment(text, SegmentMode::Semantic);
+        
+        // Should have 4 segments: Top (h1), Sub1 (h2), Sub1a (h3), Sub2 (h2)
+        assert_eq!(segments.len(), 4, "Expected 4 sections");
+        
+        // Check heading levels are detected
+        let h1_count = segments.iter().filter(|s| s.heading_level == 1).count();
+        let h2_count = segments.iter().filter(|s| s.heading_level == 2).count();
+        let h3_count = segments.iter().filter(|s| s.heading_level == 3).count();
+        
+        assert_eq!(h1_count, 1);
+        assert_eq!(h2_count, 2);
+        assert_eq!(h3_count, 1);
     }
 
     #[test]

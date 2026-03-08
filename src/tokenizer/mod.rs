@@ -53,8 +53,8 @@ mod tests {
     fn test_count_segments() {
         let t = create(&TokenizerKind::Approximate);
         let mut segments = vec![
-            Segment { text: "hello".to_string(), start: 0, end: 5, tokens: 0, is_code_block: false },
-            Segment { text: "world".to_string(), start: 6, end: 11, tokens: 0, is_code_block: false },
+            Segment { text: "hello".to_string(), start: 0, end: 5, tokens: 0, is_code_block: false, heading_level: 0 },
+            Segment { text: "world".to_string(), start: 6, end: 11, tokens: 0, is_code_block: false, heading_level: 0 },
         ];
         t.count_segments(&mut segments);
         assert!(segments[0].tokens > 0);

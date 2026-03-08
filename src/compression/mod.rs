@@ -180,6 +180,7 @@ mod tests {
                 end: text.len(),
                 tokens,
                 is_code_block: false,
+                heading_level: 0,
             },
             minhash: MinHashSignature::new(),
             tfidf_score: score,

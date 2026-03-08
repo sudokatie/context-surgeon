@@ -77,6 +77,7 @@ mod tests {
                 end: text.len(),
                 tokens,
                 is_code_block: false,
+                heading_level: 0,
             },
             minhash: MinHash::compute_signature(text),
             tfidf_score: score,

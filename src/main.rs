@@ -81,10 +81,15 @@ fn run() -> Result<(), Error> {
     
     // Segment input
     progress.segmenting();
-    let segments = if config.preserve_code {
-        segmenter::segment_with_code_blocks(&input, segmenter::SegmentMode::Paragraph)
+    let segment_mode = if config.semantic {
+        segmenter::SegmentMode::Semantic
     } else {
-        segmenter::segment(&input, segmenter::SegmentMode::Paragraph)
+        segmenter::SegmentMode::Paragraph
+    };
+    let segments = if config.preserve_code || config.semantic {
+        segmenter::segment_with_code_blocks(&input, segment_mode)
+    } else {
+        segmenter::segment(&input, segment_mode)
     };
     
     // Early exit if no segments
